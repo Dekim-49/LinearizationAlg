@@ -77,23 +77,6 @@ void CreateSplineCurve(MbCurve3D* *result, SArray<MbCartPoint3D> points, MbeSpac
 //
 //}
 
-
-/// <summary>
-/// Находит точку середины между двумя точками
-/// </summary>
-/// <param name="start">Точка начала</param>
-/// <param name="end">Точка конца</param>
-/// <returns>Точка центра</returns>
-MbCartPoint3D FindCenter(MbCartPoint3D start, MbCartPoint3D end)
-{
-	MbCartPoint3D result;
-	result.x = (start.x + end.x) / 2;
-	result.y = (start.y + end.y) / 2;
-	result.z = (start.z + end.z) / 2;
-	return result;
-}
-
-
 /// <summary>
 /// Алгоритм линеаризации. Если расстояние от части кривой до ломаной больше радиуса r, то эта часть кривой делится на два
 /// </summary>
@@ -105,17 +88,18 @@ SArray<MbCartPoint3D> Linearization(MbCurve3D* curve, double r)
 	SArray<MbCartPoint3D> result; //массив координат ломаной
 	std::vector <double> paramForCoords; //вектор параметров для нахождения координат 
 	
-	double len = curve->GetParamLength(); //длина кривой
 	bool flag = true; //если все раасстояния от кривой до линеаризации попадают под радиус.
 	
-	double t = 0.0;
+	double tMin = curve->GetTMin(),
+		tMax = curve->GetTMax();
 
 	//Вносим начало и конец кривой
-	MbCartPoint3D ptStart, ptEnd;
-	paramForCoords.push_back(t);
-	paramForCoords.push_back(len);
-	curve->PointOn(t, ptStart);
-	curve->PointOn(len, ptEnd);
+	MbCartPoint3D ptStart = curve->GetLimitPoint(1), 
+		ptEnd = curve->GetLimitPoint(2);
+
+	paramForCoords.push_back(tMin);
+	paramForCoords.push_back(tMax);
+
 	result.Add(ptStart);
 	result.Add(ptEnd);
 
@@ -123,17 +107,18 @@ SArray<MbCartPoint3D> Linearization(MbCurve3D* curve, double r)
 	while (flag)
 	{
 		int i = 0;
-		for (i = 0; i < result.Count()-1; i++)
+		for (i = 0; i < paramForCoords.Count()-1; i++)
 		{
-			if (curve->DistanceToPoint(FindCenter(result[i], result[i+1])) > r)
-			{
-				double n = (paramForCoords[i] + paramForCoords[i + 1]) / 2;
-				auto iter = paramForCoords.cbegin();
-				paramForCoords.emplace(iter + i + 1, n);
+			double tMid = (paramForCoords[i] + paramForCoords[i + 1]) / 2;
+			MbCartPoint3D ptCenter = curve->PointOn(tMid);
 
-				MbCartPoint3D pt;
-				curve->PointOn(paramForCoords[i + 1], pt);
-				result.AddAt(pt, i + 1);
+			MbCurve3D* segment;
+			Segment(result[i], result[i + 1], segment);
+
+			if (segment->DistanceToPoint(ptCenter) > r)
+			{
+				paramForCoords.insert(paramForCoords.begin() + i + 1, tMid);
+				result.AddAt(ptCenter, i + 1);
 		
 				break;
 			}
@@ -142,8 +127,6 @@ SArray<MbCartPoint3D> Linearization(MbCurve3D* curve, double r)
 	}
 	return result;
 }
-
-
 
 int main()
 {
